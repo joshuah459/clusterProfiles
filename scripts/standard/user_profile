@@ -1,0 +1,93 @@
+# /etc/profile: system-wide .profile file for the Bourne shell (sh(1))
+# and Bourne compatible shells (bash(1), ksh(1), ash(1), ...).
+
+if [ "`id -u`" -eq 0 ]; then
+  PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+else
+  PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/games:/usr/games"
+fi
+export PATH
+
+if [ "${PS1-}" ]; then
+  if [ "${BASH-}" ] && [ "$BASH" != "/bin/sh" ]; then
+    # The file bash.bashrc already sets the default PS1.
+    # PS1='\h:\w\$ '
+    if [ -f /etc/bash.bashrc ]; then
+      . /etc/bash.bashrc
+    fi
+  else
+    if [ "`id -u`" -eq 0 ]; then
+      PS1='# '
+    else
+      PS1='$ '
+    fi
+  fi
+fi
+
+if [ -d /etc/profile.d ]; then
+  for i in /etc/profile.d/*.sh; do
+    if [ -r $i ]; then
+      . $i
+    fi
+  done
+  unset i
+fi
+
+
+
+clear
+NUMBEROFNODES=$(<~/.clusterConfig/.clusterConfig.cluster)
+NUMPROCESS=$((NUMBEROFNODES * 4))
+echo "Number of Cluster Nodes Enabled: "$NUMBEROFNODES""
+echo "Number of Avaliable Cores: $NUMPROCESS"
+echo "To change this execute setNodeNumber <integer>"
+echo
+echo Send a file to every child in the cluster: sendToCluster file/folder
+echo
+echo
+echo "To run a script on the cluster use runOnCluster <scriptname>"
+echo
+echo
+
+sendToCluster() {
+    #do things with parameters like $1 such as
+    echo Tranfsering "$1" to childOne
+    scp -r "$1" clusteruser@192.168.1.161:~/
+    echo Tranfsering "$1" to childTwo
+    scp -r "$1" clusteruser@192.168.1.162:~/
+echo Tranfsering "$1" to childThree
+    scp -r "$1" clusteruser@192.168.1.163:~/
+echo Tranfsering "$1" to childFour
+    scp -r "$1" clusteruser@192.168.1.164:~/
+}
+
+runOnCluster() {
+echo "Sending script to cluster, stand by..."
+sendToCluster "$1"
+
+echo
+echo
+echo
+echo "Beginning Execution."
+date >> clusterUse.log
+echo "Script Name: "$1"" >> clusterUse.log
+echo "Number of Active Nodes for Execution: "$NUMBEROFNODES"" >> clusterUse.log
+start=`date +%s.%N`
+OUTPUT=$(mpirun.openmpi -np "$NUMPROCESS" -machinefile ~/.clusterConfig/nodesips  python "$1")
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "$OUTPUT"
+echo "$OUTPUT" >> clusterUse.log
+echo ""$1" Executed in "$runtime" seconds."
+echo "Runtime: "$runtime"" >> clusterUse.log
+echo "" >> clusterUse.log
+echo "The output of this execution can be found in the clusterUse.log file."
+}
+
+setNodeNumber() {
+echo $1
+echo "$1" > ~/.clusterConfig/.clusterConfig.cluster
+source /etc/profile
+echo "Number of active nodes has been updated to "$1" sucessfully."
+
+}

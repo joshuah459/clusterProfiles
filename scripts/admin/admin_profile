@@ -1,0 +1,96 @@
+clear
+NUMBEROFNODES=$(<~/.clusterConfig/.clusterConfig.cluster)
+NUMPROCESS=$((NUMBEROFNODES * 4))
+echo "ADMINISTRATION ACCOUNT"
+echo "Number of Cluster Nodes Enabled: "$NUMBEROFNODES""
+echo "Number of Avaliable Processors: $NUMPROCESS"
+echo "To change this execute setNodeNumber <integer>"
+echo 
+echo How to access nodes:
+echo
+echo "childOne:   connectone"
+echo "childTwo:   connecttwo"
+echo "childThree: connectthree"
+echo "childFour:  connectfour"
+echo
+echo Password: OneTwoThree123
+echo
+echo Send a file to every child in the cluster: sendToCluster file/folder
+echo
+echo
+alias connectone="ssh clusteruser@192.168.1.161"
+alias connecttwo="ssh clusteruser@192.168.1.162"
+alias connectthree="ssh clusteruser@192.168.1.163"
+alias connectfour="ssh clusteruser@192.168.1.164"
+
+echo 
+echo
+echo "To run a script on the cluster use runOnCluster <scriptname>"
+echo 
+echo
+
+sendToCluster() {
+    #do things with parameters like $1 such as
+    echo Tranfsering "$1" to childOne
+    scp -r "$1" clusteruser@192.168.1.161:~/
+    echo Tranfsering "$1" to childTwo
+    scp -r "$1" clusteruser@192.168.1.162:~/
+echo Tranfsering "$1" to childThree
+    scp -r "$1" clusteruser@192.168.1.163:~/
+echo Tranfsering "$1" to childFour
+    scp -r "$1" clusteruser@192.168.1.164:~/
+}
+
+runOnCluster() {
+echo "Sending script to cluster, stand by..."
+sendToCluster "$1"
+
+echo
+echo
+echo
+echo "Beginning Execution."
+date >> clusterUse.log
+echo "Script Name: "$1"" >> clusterUse.log
+echo "Number of Active Nodes for Execution: "$NUMBEROFNODES"" >> clusterUse.log
+start=`date +%s.%N`
+OUTPUT=$(mpirun.openmpi -np "$NUMPROCESS" -machinefile ~/.clusterConfig/nodesips  python "$1")
+end=`date +%s.%N`
+runtime=$( echo "$end - $start" | bc -l )
+echo "$OUTPUT"
+echo "$OUTPUT" >> clusterUse.log
+echo ""$1" Executed in "$runtime" seconds."
+echo "Runtime: "$runtime"" >> clusterUse.log
+echo "" >> clusterUse.log
+echo "The output of this execution can be found in the clusterUse.log file."  
+}
+
+setNodeNumber() {
+echo $1
+echo "$1" > ~/.clusterConfig/.clusterConfig.cluster
+source ~/.bash_login
+echo "Number of active nodes has been updated to "$1" sucessfully."
+
+}
+
+
+
+
+createClusterUser() {
+sudo adduser --gecos "" --disabled-password "$1"
+echo "$1:12345" | sudo chpasswd
+sudo passwd --expire "$1"
+
+
+
+#if person is an admin
+if [[ "$2" == "sudo" ]];
+  then
+    echo "Cluster Administrator Account Creation Requested"
+    sudo adduser "$1" sudo
+    sudo cp ~/.bash_login /home/"$1"/
+    sudo chmod 777 /home/"$1"/.bash_login
+    echo "Operation Complete."
+fi
+
+}
+
